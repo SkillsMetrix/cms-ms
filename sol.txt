@@ -28,3 +28,41 @@ app.post('/register', (req, res) => {
 });
 
 app.listen(5000, () => console.log('📘 Registry running on http://localhost:5000'));
+
+
+----------------
+
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const { createProxyMiddleware } = require('http-proxy-middleware');
+
+const app = express();
+const PORT = 3000;
+const registryPath = path.resolve(__dirname, '../registry/registry.json');
+
+function getServiceInfo(basePath) {
+  const registry = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
+  return Object.values(registry).find(service => service.basePath === basePath);
+}
+
+app.use((req, res, next) => {
+  const basePath = '/' + req.url.split('/')[1];
+  const service = getServiceInfo(basePath);
+
+  if (!service) {
+    return res.status(502).json({ error: `Service not found for ${basePath}` });
+  }
+
+  const target = `http://${service.host}:${service.port}`;
+  console.log(`🔁 Proxying ${req.url} → ${target}`);
+  createProxyMiddleware({
+    target,
+    changeOrigin: true,
+    pathRewrite: { [`^${service.basePath}`]: '' },
+  })(req, res, next);
+});
+
+app.listen(PORT, () => {
+  console.log(`🚪 API Gateway running on http://localhost:${PORT}`);
+});
