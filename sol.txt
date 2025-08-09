@@ -7,7 +7,6 @@ spec:
   selector:
     matchLabels:
       app: myapp
-  replicas: 3
   template:
     metadata:
       labels:
@@ -15,4 +14,10 @@ spec:
     spec:
       containers:
       - name: myapp
-        image: nginx
+        image: cammey20/node-cms
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 3000
