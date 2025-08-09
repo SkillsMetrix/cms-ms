@@ -1,91 +1,11 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const axios= require('axios')
-const axiosRetry = require('axios-retry')
-const CircuitBreaker= require('opossum')
-const jwt = require("jsonwebtoken");
-const bodyParser= require('body-parser')
-const { createProxyMiddleware } = require('http-proxy-middleware');
- 
 
-//axiosRetry(axios,{retries: 3, retryDelay: axiosRetry.exponentialDelay})
-const JWT_SECRET= 'supersecretkey'
-const app = express();
-const PORT = 3000;
-const registryPath = path.resolve(__dirname, '../registry/registry.json');
-app.use(bodyParser.json())
-
-
-// JWT Middleware
-app.use((req, res, next) => {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "No Token Found" });
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: "Invalid Token" });
-    req.user = user;
-    console.log(user);
-    next();
-  });
-});
-
-
-function getServiceInfo(basePath) {
-  const registry = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
-  return Object.values(registry).find(service => service.basePath === basePath);
-}
-
-function proxyRequest(req,service){
-  const target= `http://${service.host}:${service.port}`
-  const path= req.url.replace(service.basePath, '')
-  return axios({
-    method: req.method,
-    url: `${target}${path}`,
-    headers: req.headers,
-    data: req.body,
-    timeout: 5000
-  })
-}
-
-app.use((req, res, next) => {
-  const basePath = '/' + req.url.split('/')[1];
-  const service = getServiceInfo(basePath);
-
-  if (!service) {
-    return res.status(502).json({ error: `Service not found for ${basePath}` });
-  }
-
-const breaker=new CircuitBreaker(()=> proxyRequest(req,service),{
-  timeout:5000,
-  errorThresholdPercentage: 50,
-  resetTimeout: 10000
-})
-breaker.on('open',()=> console.log(' 🔴 Circuit Breaker Open'))
-breaker.on('halfOpen',()=> console.log(' 🟡 Circuit Breaker Half Open'))
-
-breaker.fire()
-.then(response => {
-  console.log('✅ Breaker request success');
-  res.status(response.status).send(response.data)
-  
-})
-.catch(err => {
-  console.error('🔥 Breaker Request Failed...!',err.message )
-  if(!res.headersSent){
-    res.status(503).json({error: '😩 service Unavailable....!'})
-  }
-})
-
-  const target = `http://${service.host}:${service.port}`;
-  console.log(`🔁 Proxying ${req.url} → ${target}`);
-  createProxyMiddleware({
-    target,
-    changeOrigin: true,
-    pathRewrite: { [`^${service.basePath}`]: '' },
-  })(req, res, next);
-});
-
-app.listen(PORT, () => {
-  console.log(`🚪 API Gateway running on http://localhost:${PORT}`);
-});
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp
+  labels:
+    app: myapp
+spec:
+  containers:
+  - name: nginx-container
+    image: nginx
